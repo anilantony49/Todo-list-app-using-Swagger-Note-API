@@ -34,35 +34,42 @@ class _TodoListState extends State<TodoList> {
         ),
         replacement: RefreshIndicator(
           onRefresh: fetchTodo,
-          child: ListView.builder(
-              itemCount: items.length,
-              itemBuilder: (context, index) {
-                final item = items[index] as Map;
-                final id = item['_id'] as String;
-                return ListTile(
-                  leading: CircleAvatar(child: Text('${index + 1}')),
-                  title: Text(item['title']),
-                  subtitle: Text(item['description']),
-                  trailing: PopupMenuButton(onSelected: (value) {
-                    if (value == 'edit') {
-                      navigateToEditPage(context,item);
-                    } else if (value == 'delete') {
-                      deleteById(id);
-                    }
-                  }, itemBuilder: (context) {
-                    return [
-                      const PopupMenuItem(
-                        child: Text('Edit'),
-                        value: 'edit',
-                      ),
-                      const PopupMenuItem(
-                        child: Text('Delete'),
-                        value: 'delete',
-                      )
-                    ];
-                  }),
-                );
-              }),
+          child: Visibility(
+            visible: items.isNotEmpty,
+            replacement: Center(child: Text('No Todo Item'),),
+            child: ListView.builder(
+                itemCount: items.length,
+                padding: EdgeInsets.all(12),
+                itemBuilder: (context, index) {
+                  final item = items[index] as Map;
+                  final id = item['_id'] as String;
+                  return Card(
+                    child: ListTile(
+                      leading: CircleAvatar(child: Text('${index + 1}')),
+                      title: Text(item['title']),
+                      subtitle: Text(item['description']),
+                      trailing: PopupMenuButton(onSelected: (value) {
+                        if (value == 'edit') {
+                          navigateToEditPage(context,item);
+                        } else if (value == 'delete') {
+                          deleteById(id);
+                        }
+                      }, itemBuilder: (context) {
+                        return [
+                          const PopupMenuItem(
+                            child: Text('Edit'),
+                            value: 'edit',
+                          ),
+                          const PopupMenuItem(
+                            child: Text('Delete'),
+                            value: 'delete',
+                          )
+                        ];
+                      }),
+                    ),
+                  );
+                }),
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -72,9 +79,13 @@ class _TodoListState extends State<TodoList> {
     );
   }
 
-  void navigateToEditPage(BuildContext context,Map item) {
-    final route = MaterialPageRoute(builder: (context) => AddTodoPage());
-    Navigator.push(context, route);
+  void navigateToEditPage(BuildContext context,Map item)async {
+    final route = MaterialPageRoute(builder: (context) => AddTodoPage(todo:item));
+   await Navigator.push(context, route);
+   setState(() {
+     isLoading=true;
+   });
+   fetchTodo();
   }
  Future <void> navigateToAddPage(BuildContext context)async {
     final route = MaterialPageRoute(builder: (context) => AddTodoPage());
