@@ -38,10 +38,29 @@ class _TodoListState extends State<TodoList> {
               itemCount: items.length,
               itemBuilder: (context, index) {
                 final item = items[index] as Map;
+                final id = item['_id'] as String;
                 return ListTile(
                   leading: CircleAvatar(child: Text('${index + 1}')),
                   title: Text(item['title']),
                   subtitle: Text(item['description']),
+                  trailing: PopupMenuButton(onSelected: (value) {
+                    if (value == 'edit') {
+                      navigateToEditPage(context,item);
+                    } else if (value == 'delete') {
+                      deleteById(id);
+                    }
+                  }, itemBuilder: (context) {
+                    return [
+                      const PopupMenuItem(
+                        child: Text('Edit'),
+                        value: 'edit',
+                      ),
+                      const PopupMenuItem(
+                        child: Text('Delete'),
+                        value: 'delete',
+                      )
+                    ];
+                  }),
                 );
               }),
         ),
@@ -53,14 +72,35 @@ class _TodoListState extends State<TodoList> {
     );
   }
 
-  void navigateToAddPage(BuildContext context) {
+  void navigateToEditPage(BuildContext context,Map item) {
     final route = MaterialPageRoute(builder: (context) => AddTodoPage());
     Navigator.push(context, route);
   }
+ Future <void> navigateToAddPage(BuildContext context)async {
+    final route = MaterialPageRoute(builder: (context) => AddTodoPage());
+   await Navigator.push(context, route);
+   setState(() {
+     isLoading=true;
+   });
+   fetchTodo();
+  }
+
+  Future<void> deleteById(String id) async {
+    final url = 'https://api.nstack.in/v1/todos/$id';
+    final uri = Uri.parse(url);
+    final response = await http.delete(uri);
+    if(response.statusCode==200){
+    final filtered = items.where((element) => element['_id']!=id).toList();
+    setState(() {
+      items = filtered;
+    });
+    }else{
+    showErrorMessage('Unable to Delete');
+    }
+  }
 
   Future<void> fetchTodo() async {
-   
-    final url = 'https://api.nstack.in/v1/todos?page=1&limit=10';
+    const url = 'https://api.nstack.in/v1/todos?page=1&limit=10';
     final uri = Uri.parse(url);
     final response = await http.get(uri);
 
@@ -75,7 +115,16 @@ class _TodoListState extends State<TodoList> {
     setState(() {
       isLoading = false;
     });
-    print(response.statusCode);
-    print(response.body);
+ 
+  }
+
+
+  void showErrorMessage(String message) {
+    final snackBar = SnackBar(
+        content: Text(
+      message,
+      style: TextStyle(color: Colors.red),
+    ));
+    ScaffoldMessenger.of(context).showSnackBar(snackBar);
   }
 }
