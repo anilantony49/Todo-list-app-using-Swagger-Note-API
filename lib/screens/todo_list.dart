@@ -1,141 +1,98 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:to_do_app/bloc/todo_bloc.dart';
+import 'package:to_do_app/model/todo_model.dart';
 import 'package:to_do_app/screens/add_page.dart';
-import 'package:http/http.dart' as http;
 
-class TodoList extends StatefulWidget {
+import 'package:to_do_app/widget/todo_card.dart';
+
+class TodoList extends StatelessWidget {
   const TodoList({super.key});
-
-  @override
-  State<TodoList> createState() => _TodoListState();
-}
-
-class _TodoListState extends State<TodoList> {
-  List items = [];
-  bool isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    fetchTodo();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Todo List"),
       ),
-      body: Visibility(
-        visible: isLoading,
-        child: const Center(
-          child: CircularProgressIndicator(),
-        ),
-        replacement: RefreshIndicator(
-          onRefresh: fetchTodo,
-          child: Visibility(
-            visible: items.isNotEmpty,
-            replacement: Center(child: Text('No Todo Item'),),
-            child: ListView.builder(
-                itemCount: items.length,
-                padding: EdgeInsets.all(12),
-                itemBuilder: (context, index) {
-                  final item = items[index] as Map;
-                  final id = item['_id'] as String;
-                  return Card(
-                    child: ListTile(
-                      leading: CircleAvatar(child: Text('${index + 1}')),
-                      title: Text(item['title']),
-                      subtitle: Text(item['description']),
-                      trailing: PopupMenuButton(onSelected: (value) {
-                        if (value == 'edit') {
-                          navigateToEditPage(context,item);
-                        } else if (value == 'delete') {
-                          deleteById(id);
-                        }
-                      }, itemBuilder: (context) {
-                        return [
-                          const PopupMenuItem(
-                            child: Text('Edit'),
-                            value: 'edit',
-                          ),
-                          const PopupMenuItem(
-                            child: Text('Delete'),
-                            value: 'delete',
-                          )
-                        ];
-                      }),
-                    ),
-                  );
-                }),
-          ),
-        ),
+      body: BlocBuilder<TodoBloc, TodoState>(
+        builder: (context, state) {
+          if (state is TodoInitial || state is TodoOperationSuccessState) {
+            context.read<TodoBloc>().add(TodoInitialFetchEvent());
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          } else if (state is TodoLoadSuccess) {
+            final todos = state.todos;
+
+            return RefreshIndicator(
+              onRefresh: () async {
+                context.read<TodoBloc>().add(TodoInitialFetchEvent());
+              },
+              child: Visibility(
+                visible: todos.isNotEmpty,
+                replacement: const Center(
+                  child: Text('No Todo Item'),
+                ),
+                child: ListView.builder(
+                    itemCount: todos.length,
+                    padding: const EdgeInsets.all(12),
+                    itemBuilder: (context, index) {
+                      final todo = todos[index];
+                      // final id = item['_id'] as String;
+                      return TodoCard(
+                          index: index,
+                          item: todo,
+                          navigateEdit: (todo) =>
+                              navigateToEditPage(context, todo),
+                          deleteById: deleteById);
+                    }),
+              ),
+            );
+          } else if (state is TodoOperationFailureState) {
+            context.read<TodoBloc>().add(TodoInitialFetchEvent());
+            return const Center(
+              child: Text('Failed to load todos'),
+            );
+          } else {
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          }
+        },
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => navigateToAddPage(context),
-        label: Text('Add Todo'),
+        label: const Text('Add Todo'),
       ),
     );
   }
 
-  void navigateToEditPage(BuildContext context,Map item)async {
-    final route = MaterialPageRoute(builder: (context) => AddTodoPage(todo:item));
-   await Navigator.push(context, route);
-   setState(() {
-     isLoading=true;
-   });
-   fetchTodo();
-  }
- Future <void> navigateToAddPage(BuildContext context)async {
-    final route = MaterialPageRoute(builder: (context) => AddTodoPage());
-   await Navigator.push(context, route);
-   setState(() {
-     isLoading=true;
-   });
-   fetchTodo();
-  }
+  void navigateToEditPage(BuildContext context, TodoModel todo) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+          builder: (context) => AddTodoPage(
+                todo: todo,
+              )),
+    );
 
-  Future<void> deleteById(String id) async {
-    final url = 'https://api.nstack.in/v1/todos/$id';
-    final uri = Uri.parse(url);
-    final response = await http.delete(uri);
-    if(response.statusCode==200){
-    final filtered = items.where((element) => element['_id']!=id).toList();
-    setState(() {
-      items = filtered;
-    });
-    }else{
-    showErrorMessage('Unable to Delete');
+    if (result == true) {
+      context.read<TodoBloc>().add(TodoInitialFetchEvent());
     }
   }
 
-  Future<void> fetchTodo() async {
-    const url = 'https://api.nstack.in/v1/todos?page=1&limit=10';
-    final uri = Uri.parse(url);
-    final response = await http.get(uri);
+  Future<void> navigateToAddPage(BuildContext context) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const AddTodoPage()),
+    );
 
-    if (response.statusCode == 200) {
-      final json = jsonDecode(response.body) as Map;
-      final result = json['items'] as List;
-
-      setState(() {
-        items = result;
-      });
+    if (result == true) {
+      context.read<TodoBloc>().add(TodoInitialFetchEvent());
     }
-    setState(() {
-      isLoading = false;
-    });
- 
   }
 
-
-  void showErrorMessage(String message) {
-    final snackBar = SnackBar(
-        content: Text(
-      message,
-      style: TextStyle(color: Colors.red),
-    ));
-    ScaffoldMessenger.of(context).showSnackBar(snackBar);
+  void deleteById(BuildContext context, String id) {
+    context.read<TodoBloc>().add(TodoDeleteEvent(todoId: id));
   }
 }
