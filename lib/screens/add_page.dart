@@ -59,7 +59,7 @@ class AddTodoPage extends StatelessWidget {
               ),
               keyboardType: TextInputType.multiline,
               maxLines: 5,
-              maxLength: 8,
+              // maxLength: 8,
             ),
             const SizedBox(
               height: 20,
